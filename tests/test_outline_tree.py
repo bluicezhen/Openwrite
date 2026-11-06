@@ -223,7 +223,8 @@ def test_outline_tree_can_rename_add_and_delete_one_local_subtree(tmp_path: Path
         title="第四章：新的钟声",
     )
     assert "#### 第四章：新的钟声" in added["content"]
-    assert added["content"].index("#### 第四章：新的钟声") < added["content"].index("## 第二幕：回声")
+    chapter_after = added["content"].index("#### 第四章：新的钟声")
+    assert chapter_after < added["content"].index("## 第二幕：回声")
     outline_path.write_text(added["content"], encoding="utf-8", newline="")
 
     structure = build_outline_structure(tmp_path)
@@ -449,4 +450,64 @@ def test_outline_tree_rejects_stale_duplicate_and_drafted_destructive_edits(tmp_
             revision=structure["revision"],
             node_id="ch_001",
             title="第十章：换号",
+        )
+
+
+def test_add_after_inserts_container_sibling_inside_its_parent(tmp_path: Path):
+    _write_outline(tmp_path)
+    outline_path = tmp_path / "src" / "outline.md"
+    structure = build_outline_structure(tmp_path)
+
+    added_act = mutate_outline_structure(
+        tmp_path,
+        operation="add_after",
+        revision=structure["revision"],
+        node_id="volume_001",
+        kind="act",
+        title="第三幕：回声",
+    )
+    content = added_act["content"]
+    assert "## 第三幕：回声" in content
+    assert "\n# 第三幕：回声" not in content
+    assert content.index("## 第二幕：回声") < content.index("## 第三幕：回声")
+    assert content.index("## 第三幕：回声") < content.index("# 附录")
+    assert added_act["selection_hint"]["kind"] == "act"
+    outline_path.write_text(content, encoding="utf-8", newline="")
+
+    structure = build_outline_structure(tmp_path)
+    added_section = mutate_outline_structure(
+        tmp_path,
+        operation="add_after",
+        revision=structure["revision"],
+        node_id="act_001",
+        kind="section",
+        title="第三节：回廊",
+    )
+    content = added_section["content"]
+    assert content.index("### 第一节：钟楼") < content.index("### 第三节：回廊")
+    assert content.index("### 第三节：回廊") < content.index("## 第二幕：回声")
+    outline_path.write_text(content, encoding="utf-8", newline="")
+
+    structure = build_outline_structure(tmp_path)
+    added_section = mutate_outline_structure(
+        tmp_path,
+        operation="add_after",
+        revision=structure["revision"],
+        node_id="section_001",
+        kind="chapter",
+        title="第五章：新的钟声",
+    )
+    content = added_section["content"]
+    assert content.index("#### 第一章：雨夜") < content.index("#### 第五章：新的钟声")
+    assert content.index("#### 第五章：新的钟声") < content.index("## 第二幕：回声")
+
+    structure = build_outline_structure(tmp_path)
+    with pytest.raises(OutlineEditError, match="不匹配"):
+        mutate_outline_structure(
+            tmp_path,
+            operation="add_after",
+            revision=structure["revision"],
+            node_id="volume_001",
+            kind="volume",
+            title="第二卷：错层",
         )

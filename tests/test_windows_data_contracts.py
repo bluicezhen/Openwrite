@@ -293,3 +293,23 @@ def test_windows_pnpm_shim_uses_node_entry_without_shell(tmp_path, monkeypatch, 
         "test-node.exe",
         str(path),
     ]
+
+
+def test_container_add_after_keeps_crlf_without_mixing_line_endings(tmp_path):
+    path = tmp_path / "src/outline.md"
+    path.parent.mkdir()
+    seed = "# 一卷\r\n## 第一幕\r\n### 第一节\r\n#### 第1章：门\r\n\r\n旧摘要。\r\n"
+    path.write_bytes(seed.encode())
+    changes = [
+        {"operation": "add_after", "title": "第二节：窗", "node_id": "act_001"},
+        {"operation": "add_after", "title": "第二幕：夜", "node_id": "volume_001"},
+    ]
+    for change in changes:
+        structure = build_outline_structure(tmp_path)
+        edited = mutate_outline_structure(tmp_path, revision=structure["revision"], **change)
+        content = edited["content"]
+        assert "\r\n" in content and "\n" not in content.replace("\r\n", "")
+        path.write_bytes(content.encode())
+    rebuilt = build_outline_structure(tmp_path)
+    assert rebuilt["counts"]["section"] == 2
+    assert rebuilt["counts"]["act"] == 2

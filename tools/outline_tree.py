@@ -310,9 +310,16 @@ def mutate_outline_structure(
                 insert_index = int(target["end_line"])
                 parent_title = target["title"]
             else:
-                expected_kind = target["kind"]
-                insert_index = int(target["end_line"])
-                parent_title = target.get("path", [""])[-1] if target.get("path") else "大纲根节点"
+                # add_after inserts a sibling before the next heading of the
+                # target's own level. A container therefore receives the kind
+                # of its children, not its own kind, and the heading lands at
+                # the end of its last child rather than after its subtree.
+                expected_kind = str(target.get("child_kind") or target["kind"])
+                if target["kind"] in CHILD_KIND:
+                    insert_index = _add_after_index(lines, target)
+                else:
+                    insert_index = int(target["end_line"])
+                parent_title = target["title"]
         if kind and kind != expected_kind:
             raise OutlineEditError("新增层级与当前节点不匹配，请刷新后重试")
         clean_title = _validate_title(title, expected_kind)
@@ -677,6 +684,21 @@ def _line_ending(line: str) -> str:
     if line.endswith("\r\n"):
         return "\r\n"
     return "\n" if line.endswith("\n") else ""
+
+
+def _add_after_index(lines: list[str], target: dict[str, Any]) -> int:
+    """Return the insertion point for a new sibling of a container *target*.
+
+    The container belongs inside its parent, so the new heading is placed
+    before the next heading at the target's level and trimmed back over the
+    blank lines that separate siblings.
+    """
+    cursor = int(target["end_line"])
+    while cursor < len(lines) and not HEADING_RE.match(lines[cursor].strip()):
+        cursor += 1
+    while cursor > 0 and not lines[cursor - 1].strip():
+        cursor -= 1
+    return cursor
 
 
 def _summary_block(summary: str, *, has_following: bool) -> list[str]:
